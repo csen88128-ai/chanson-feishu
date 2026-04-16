@@ -5,14 +5,14 @@
 
 import os
 import json
-from typing import Any, Dict
+from typing import Any, Dict, Annotated
 from langchain.tools import tool
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 from langgraph.graph import MessagesState
 from langgraph.graph.message import add_messages
 from langchain_core.messages import AnyMessage
-from coze_coding_utils.runtime_ctx.context import default_headers, request_context, new_context
+from coze_coding_utils.runtime_ctx.context import default_headers
 from storage.memory.memory_saver import get_memory_saver
 
 
