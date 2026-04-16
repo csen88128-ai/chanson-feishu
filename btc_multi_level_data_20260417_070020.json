@@ -1,0 +1,91 @@
+{
+  "data": {
+    "symbol": "BTCUSDT",
+    "levels": {
+      "1h": {
+        "interval": "1h",
+        "klines_count": 250,
+        "data_range": {
+          "start": "1970-01-21T13:11:24",
+          "end": "1970-01-21T13:26:20.400000"
+        },
+        "price": {
+          "current": 74823.58,
+          "open": 74857.25,
+          "high": 74823.58,
+          "low": 74857.25,
+          "change": 6.970000000001164,
+          "change_percent": 0.009316113093070061
+        },
+        "volume": 18644.09690047,
+        "indicators": {
+          "ma5": 74828.644,
+          "ma10": 74370.69,
+          "ma20": 74415.334,
+          "ma30": 74449.316,
+          "ma60": 74242.10966666667,
+          "rsi": 52.932857860617865,
+          "macd": 146.42729129386709,
+          "macd_dif": 125.33709707570961,
+          "macd_dea": 52.123451428776065,
+          "boll_upper": 75373.56290022911,
+          "boll_mid": 74415.334,
+          "boll_lower": 73457.1050997709,
+          "atr": 670.595714285714
+        }
+      },
+      "1d": {
+        "interval": "1d",
+        "klines_count": 250,
+        "data_range": {
+          "start": "1970-01-21T07:27:21.600000",
+          "end": "1970-01-21T13:25:55.200000"
+        },
+        "price": {
+          "current": 73912.22,
+          "open": 74690.01,
+          "high": 74826.51,
+          "low": 75500.0,
+          "change": 597.2400000000052,
+          "change_percent": 0.8146220595027173
+        },
+        "volume": 72283880.71362728,
+        "indicators": {
+          "ma5": 72584.72,
+          "ma10": 71588.06000000001,
+          "ma20": 69005.39199999999,
+          "ma30": 68711.191,
+          "ma60": 68017.17450000001,
+          "rsi": 81.59742420869803,
+          "macd": 1273.403987053101,
+          "macd_dif": 1404.675489570509,
+          "macd_dea": 767.9734960439584,
+          "boll_upper": 74935.96986143307,
+          "boll_mid": 69005.39199999999,
+          "boll_lower": 63074.814138566915,
+          "atr": 2882.144285714287
+        }
+      }
+    },
+    "update_time": "2026-04-17T07:00:20.328161",
+    "source": "multi_exchange",
+    "total_klines": 500
+  },
+  "signals": {
+    "overall_trend": "neutral",
+    "level_signals": {
+      "1h": {
+        "trend": "neutral",
+        "rsi_signal": "neutral",
+        "macd_signal": "bullish_golden"
+      },
+      "1d": {
+        "trend": "bullish",
+        "rsi_signal": "overbought",
+        "macd_signal": "bullish_golden"
+      }
+    },
+    "resonance": false,
+    "strength": 0
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "data_preloader": {
+    "success": true,
+    "time": 0.010361671447753906,
+    "data_available": true
+  },
+  "data_validator": {
+    "success": true,
+    "score": 85.0,
+    "errors": 0,
+    "warnings": 1
+  },
+  "parallel_agents": {
+    "success": true,
+    "time": 2.004033327102661,
+    "tasks": 7,
+    "speedup": 5.993459896913042
+  },
+  "optimized_prompts": {
+    "success": true,
+    "standard_length": 472,
+    "quick_length": 123,
+    "reduction": 73.94067796610169
+  }
+}
