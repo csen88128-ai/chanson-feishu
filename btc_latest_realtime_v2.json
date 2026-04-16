@@ -1,0 +1,19 @@
+{
+  "source": "Huobi API",
+  "current_price": 74119.22,
+  "change_percent": -0.07,
+  "high_24h": 74198.16,
+  "low_24h": 73986.86,
+  "volume": 1159041,
+  "ma5": 74146.02,
+  "ma20": 74605.68,
+  "ma60": 74447.34,
+  "rsi": 39.12,
+  "macd": -161.29,
+  "macd_dif": -62.46,
+  "macd_dea": 18.18,
+  "data_time": "2026-04-16 18:00:00",
+  "fetch_time": "2026-04-17 00:15:00",
+  "trend": "震荡偏空",
+  "signal": "观望"
+}
