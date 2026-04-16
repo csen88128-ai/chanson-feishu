@@ -118,10 +118,10 @@ class PerformanceMonitor:
             'successes': successes,
             'failures': failures,
             'success_rate': successes / (successes + failures) if (successes + failures) > 0 else 0,
-            'avg_execution_time': sum(times) / len(times) if times else 0,
-            'min_execution_time': min(times) if times else 0,
-            'max_execution_time': max(times) if times else 0,
-            'std_execution_time': (sum((t - sum(times)/len(times))**2 for t in times) / len(times))**0.5 if times else 0,
+            'avg_execution_time': sum(t for t in times if t is not None) / len(times) if times else 0,
+            'min_execution_time': min(t for t in times if t is not None) if times else 0,
+            'max_execution_time': max(t for t in times if t is not None) if times else 0,
+            'std_execution_time': (sum((t - sum(times)/len(times))**2 for t in times if t is not None) / len(times))**0.5 if times else 0,
         }
 
         if accuracies:
