@@ -1,6 +1,6 @@
 """
-缠论多智能体工作流 v4.0
-集成研报生成和历史决策回溯
+缠论多智能体工作流 v5.0
+集成实战理论和风控审核
 """
 from typing import TypedDict, Annotated, Optional, Dict, Any, List
 from langgraph.graph import StateGraph, END
@@ -26,6 +26,12 @@ class ChanlunState(TypedDict):
     # 动力学分析结果
     dynamics_analysis: Optional[Dict[str, Any]]
 
+    # 实战理论分析结果 ⭐ 新增
+    practical_theory_analysis: Optional[Dict[str, Any]]
+
+    # 风控审核结果 ⭐ 新增
+    risk_audit: Optional[Dict[str, Any]]
+
     # 市场情绪分析结果
     sentiment_analysis: Optional[Dict[str, Any]]
 
@@ -46,7 +52,7 @@ class ChanlunState(TypedDict):
     # 最终决策
     trading_decision: Optional[Dict[str, Any]]
 
-    # 研报和历史记录 ⭐ 新增
+    # 研报和历史记录
     report_path: Optional[str]
     decision_stats: Optional[Dict[str, Any]]
 
@@ -200,6 +206,102 @@ def node_dynamics_analyzer(state: ChanlunState) -> ChanlunState:
             "status": "failed",
             "error": "No data file found"
         }
+
+    return state
+
+
+def node_practical_theory(state: ChanlunState) -> ChanlunState:
+    """实战理论节点 ⭐ 新增"""
+    from agents.practical_theory import build_agent
+    import os
+    import json
+
+    agent = build_agent()
+
+    symbol = state.get("symbol", "BTCUSDT")
+    interval = state.get("interval", "1h")
+
+    # 获取最新数据文件
+    workspace_path = os.getenv("COZE_WORKSPACE_PATH", "/workspace/projects")
+    data_dir = os.path.join(workspace_path, "data")
+
+    # 查找最新数据文件
+    files = [f for f in os.listdir(data_dir) if f.startswith(symbol) and f.endswith('.csv')]
+    if files:
+        files.sort(key=lambda x: os.path.getmtime(os.path.join(data_dir, x)))
+        latest_file = os.path.join(data_dir, files[-1])
+
+        # 准备结构分析结果
+        structure_result_json = json.dumps(state.get("structure_analysis", {}), ensure_ascii=False)
+        dynamics_result_json = json.dumps(state.get("dynamics_analysis", {}), ensure_ascii=False)
+
+        # 调用智能体进行实战理论分析
+        prompt = f"""请对 {symbol} {interval} 周期进行实战理论分析，识别三类买卖点。
+
+## 结构分析结果
+{structure_result_json}
+
+## 动力学分析结果
+{dynamics_result_json}
+
+请基于以上分析，识别三类买卖点，并提供仓位管理和操作节奏建议。"""
+
+        response = agent.invoke({"messages": [HumanMessage(content=prompt)]})
+
+        last_message = response["messages"][-1]
+        state["messages"].append(last_message)
+        state["practical_theory_analysis"] = {
+            "status": "completed",
+            "agent_response": str(last_message.content)
+        }
+    else:
+        state["practical_theory_analysis"] = {
+            "status": "failed",
+            "error": "No data file found"
+        }
+
+    return state
+
+
+def node_risk_manager(state: ChanlunState) -> ChanlunState:
+    """风控节点 ⭐ 新增"""
+    from agents.risk_manager import build_agent
+    import json
+
+    agent = build_agent()
+
+    # 准备决策数据
+    decision_data_json = json.dumps(state.get("trading_decision", {}), ensure_ascii=False)
+
+    # 准备市场数据
+    market_data_json = json.dumps({
+        "fear_greed_index": 65,  # 示例值
+        "funding_rate": 0.01,    # 示例值
+        "volatility": 0.02      # 示例值
+    }, ensure_ascii=False)
+
+    # 调用智能体进行风控审核
+    prompt = f"""请对以下交易决策进行风控审核。
+
+## 交易决策
+{decision_data_json}
+
+## 市场数据
+{market_data_json}
+
+## 实战理论分析
+{state.get("practical_theory_analysis", {}).get("agent_response", "无")}
+
+请进行风控审核，判断是否通过风控检查，并给出风控建议。"""
+
+    response = agent.invoke({"messages": [HumanMessage(content=prompt)]})
+
+    last_message = response["messages"][-1]
+    state["messages"].append(last_message)
+    state["risk_audit"] = {
+        "status": "completed",
+        "agent_response": str(last_message.content)
+    }
 
     return state
 
@@ -468,7 +570,7 @@ def node_report_generator(state: ChanlunState) -> ChanlunState:
 
 
 def build_chanlun_workflow():
-    """构建缠论多智能体工作流 v4.0"""
+    """构建缠论多智能体工作流 v5.0"""
 
     workflow = StateGraph(ChanlunState)
 
@@ -476,13 +578,15 @@ def build_chanlun_workflow():
     workflow.add_node("data_collector", node_data_collector)
     workflow.add_node("structure_analyzer", node_structure_analyzer)
     workflow.add_node("dynamics_analyzer", node_dynamics_analyzer)
+    workflow.add_node("practical_theory", node_practical_theory)  # ⭐ 新增
     workflow.add_node("sentiment_analyzer", node_sentiment_analyzer)
     workflow.add_node("cross_market_analyzer", node_cross_market_analyzer)
     workflow.add_node("onchain_analyzer", node_onchain_analyzer)
     workflow.add_node("system_monitor", node_system_monitor)
     workflow.add_node("simulation_check", node_simulation_check)
     workflow.add_node("decision_maker", node_decision_maker)
-    workflow.add_node("report_generator", node_report_generator)  # ⭐ 新增
+    workflow.add_node("risk_manager", node_risk_manager)  # ⭐ 新增
+    workflow.add_node("report_generator", node_report_generator)
 
     # 设置入口
     workflow.set_entry_point("data_collector")
@@ -490,21 +594,23 @@ def build_chanlun_workflow():
     # 定义边（执行顺序）
     workflow.add_edge("data_collector", "structure_analyzer")
     workflow.add_edge("structure_analyzer", "dynamics_analyzer")
-    workflow.add_edge("dynamics_analyzer", "sentiment_analyzer")
+    workflow.add_edge("dynamics_analyzer", "practical_theory")  # ⭐ 新增
+    workflow.add_edge("practical_theory", "sentiment_analyzer")  # ⭐ 新增
     workflow.add_edge("sentiment_analyzer", "cross_market_analyzer")
     workflow.add_edge("cross_market_analyzer", "onchain_analyzer")
     workflow.add_edge("onchain_analyzer", "system_monitor")
     workflow.add_edge("system_monitor", "simulation_check")
     workflow.add_edge("simulation_check", "decision_maker")
-    workflow.add_edge("decision_maker", "report_generator")  # ⭐ 新增
-    workflow.add_edge("report_generator", END)  # ⭐ 新增
+    workflow.add_edge("decision_maker", "risk_manager")  # ⭐ 新增
+    workflow.add_edge("risk_manager", "report_generator")  # ⭐ 新增
+    workflow.add_edge("report_generator", END)
 
     return workflow.compile()
 
 
 def run_chanlun_analysis(user_request: str, symbol: str = "BTCUSDT", interval: str = "1h"):
     """
-    运行缠论分析 v4.0
+    运行缠论分析 v5.0
 
     Args:
         user_request: 用户请求描述
@@ -527,6 +633,8 @@ def run_chanlun_analysis(user_request: str, symbol: str = "BTCUSDT", interval: s
         "data_quality": None,
         "structure_analysis": None,
         "dynamics_analysis": None,
+        "practical_theory_analysis": None,  # ⭐ 新增
+        "risk_audit": None,  # ⭐ 新增
         "sentiment_analysis": None,
         "cross_market_analysis": None,
         "onchain_analysis": None,
@@ -535,8 +643,8 @@ def run_chanlun_analysis(user_request: str, symbol: str = "BTCUSDT", interval: s
         "simulation_performance": None,
         "open_positions": None,
         "trading_decision": None,
-        "report_path": None,  # ⭐ 新增
-        "decision_stats": None  # ⭐ 新增
+        "report_path": None,
+        "decision_stats": None
     }
 
     # 执行工作流
