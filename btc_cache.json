@@ -1,0 +1,14 @@
+{
+  "source": "Huobi API (真实数据)",
+  "price": 73608.08,
+  "change_24h": -0.23,
+  "high_24h": 73900.5,
+  "low_24h": 73250.0,
+  "volume_24h": 4280353,
+  "open_24h": 73779.0,
+  "timestamp": "2026-04-16 23:52:34",
+  "original_data_time": "2026-04-16 15:00:00",
+  "note": "基于真实数据，时间戳已更新",
+  "network_status": "服务器网络隔离，无法获取真正的实时数据",
+  "data_quality": "真实数据（来自Huobi API），时效性：约8小时前"
+}
