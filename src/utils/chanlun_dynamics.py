@@ -1,6 +1,14 @@
 """
-缠论动力学分析算法
+缠论动力学分析算法 v2.1
 实现MACD计算和背驰识别
+
+v2.1 改进（2026-04-18）：
+1. 新增 identify_divergence_by_bis() - 基于笔的背驰识别（推荐，减少噪音）
+2. 新增 identify_divergence_by_segments() - 基于线段的背驰识别
+3. analyze() 接受可选的 bis/segments 参数，优先使用基于笔/线段的方法
+4. 修复 _calculate_macd_area() 的索引越界问题
+5. analyze_momentum() 新增 strong_bearish 状态
+6. Strength 新增 MODERATE 级别
 """
 import numpy as np
 import pandas as pd
@@ -20,6 +28,7 @@ class Strength(Enum):
     """力度"""
     STRONG = "strong"    # 强背驰
     WEAK = "weak"        # 弱背驰
+    MODERATE = "moderate"  # 中等背驰
 
 
 @dataclass
@@ -42,6 +51,7 @@ class Divergence:
     end_price: float
     strength: Strength
     macd_area: float
+    level: str = "bi"  # "bi"=笔级别, "segment"=线段级别
 
 
 class DynamicsAnalyzer:
@@ -132,7 +142,9 @@ class DynamicsAnalyzer:
         lookback: int = 20
     ) -> List[Divergence]:
         """
-        识别背驰
+        识别背驰（旧版滑动窗口方法，保留兼容）
+
+        ⚠️ 此方法会产生大量噪音信号，建议使用 identify_divergence_by_bis 代替
 
         背驰定义（缠论）：
         - 顶背驰：价格创新高，但MACD力度减弱（MACD柱状图面积缩小）
@@ -179,7 +191,7 @@ class DynamicsAnalyzer:
         prev_high_index = None
         prev_high = 0
 
-        for i in range(index - lookback, index):
+        for i in range(max(0, index - lookback), index):
             if df.iloc[i]['high'] > prev_high:
                 prev_high = df.iloc[i]['high']
                 prev_high_index = i
@@ -231,7 +243,7 @@ class DynamicsAnalyzer:
         prev_low_index = None
         prev_low = float('inf')
 
-        for i in range(index - lookback, index):
+        for i in range(max(0, index - lookback), index):
             if df.iloc[i]['low'] < prev_low:
                 prev_low = df.iloc[i]['low']
                 prev_low_index = i
@@ -287,6 +299,9 @@ class DynamicsAnalyzer:
         Returns:
             面积值
         """
+        if start_index < 0 or end_index >= len(df) or start_index > end_index:
+            return 0.0
+
         macd_values = df.iloc[start_index:end_index + 1]['macd'].values
 
         if direction == "top":
@@ -319,7 +334,10 @@ class DynamicsAnalyzer:
         # 判断MACD状态
         macd_state = "bullish"  # 看多
         if latest['dif'] < latest['dea'] and latest['macd'] < 0:
-            macd_state = "bearish"  # 看空
+            if latest['dif'] < 0:
+                macd_state = "strong_bearish"  # 强看空（DIF<0且MACD<0）
+            else:
+                macd_state = "bearish"  # 看空
         elif latest['dif'] > latest['dea'] and latest['macd'] > 0:
             macd_state = "strong_bullish"  # 强看多
         elif latest['dif'] < latest['dea'] and latest['macd'] > 0:
@@ -350,12 +368,16 @@ class DynamicsAnalyzer:
             "cross_type": cross_type
         }
 
-    def analyze(self, df: pd.DataFrame) -> Dict:
+    def analyze(self, df: pd.DataFrame, bis: List = None, segments: List = None) -> Dict:
         """
         完整分析流程
 
+        改进：优先使用基于笔/线段的背驰识别
+
         Args:
             df: K线数据
+            bis: 笔列表（可选，用于基于笔的背驰识别）
+            segments: 线段列表（可选，用于基于线段的背驰识别）
 
         Returns:
             分析结果
@@ -363,8 +385,13 @@ class DynamicsAnalyzer:
         # 计算MACD
         df_with_macd = self.calculate_macd(df)
 
-        # 识别背驰
-        divergences = self.identify_divergence(df_with_macd)
+        # 识别背驰（优先使用基于笔的方法）
+        if bis is not None:
+            divergences = self.identify_divergence_by_bis(df_with_macd, bis)
+            if segments:
+                divergences += self.identify_divergence_by_segments(df_with_macd, segments)
+        else:
+            divergences = self.identify_divergence(df_with_macd)
 
         # 分析动量
         momentum = self.analyze_momentum(df_with_macd)
@@ -381,6 +408,126 @@ class DynamicsAnalyzer:
 
         return report
 
+    # ==================== 新增：基于笔/线段的背驰识别 ====================
+
+    def identify_divergence_by_bis(self, df_with_macd: pd.DataFrame, bis: List) -> List[Divergence]:
+        """
+        基于笔的背驰识别（推荐方法）
+
+        缠论背驰定义：
+        - 顶背驰：向上笔创新高，但该笔区间内MACD面积 < 前一个向上笔的MACD面积
+        - 底背驰：向下笔创新低，但该笔区间内|MACD面积| < 前一个向下笔的|MACD面积|
+        """
+        divergences = []
+        if len(bis) < 2:
+            return divergences
+
+        up_bis = [b for b in bis if b.direction.value == 'up']
+        down_bis = [b for b in bis if b.direction.value == 'down']
+
+        # 顶背驰
+        for i in range(1, len(up_bis)):
+            prev_bi, curr_bi = up_bis[i - 1], up_bis[i]
+            if curr_bi.high <= prev_bi.high:
+                continue
+            prev_area = self._calc_bi_macd_area(df_with_macd, prev_bi, "top")
+            curr_area = self._calc_bi_macd_area(df_with_macd, curr_bi, "top")
+            if prev_area > 0 and curr_area < prev_area:
+                ratio = curr_area / prev_area
+                strength = Strength.STRONG if ratio < 0.3 else (Strength.MODERATE if ratio < 0.7 else Strength.WEAK)
+                divergences.append(Divergence(
+                    type=DivergenceType.TOP, start_index=prev_bi.start_index,
+                    end_index=curr_bi.end_index, start_price=prev_bi.high,
+                    end_price=curr_bi.high, strength=strength, macd_area=curr_area, level="bi"))
+
+        # 底背驰
+        for i in range(1, len(down_bis)):
+            prev_bi, curr_bi = down_bis[i - 1], down_bis[i]
+            if curr_bi.low >= prev_bi.low:
+                continue
+            prev_area = abs(self._calc_bi_macd_area(df_with_macd, prev_bi, "bottom"))
+            curr_area = abs(self._calc_bi_macd_area(df_with_macd, curr_bi, "bottom"))
+            if prev_area > 0 and curr_area < prev_area:
+                ratio = curr_area / prev_area
+                strength = Strength.STRONG if ratio < 0.3 else (Strength.MODERATE if ratio < 0.7 else Strength.WEAK)
+                divergences.append(Divergence(
+                    type=DivergenceType.BOTTOM, start_index=prev_bi.start_index,
+                    end_index=curr_bi.end_index, start_price=prev_bi.low,
+                    end_price=curr_bi.low, strength=strength, macd_area=-curr_area, level="bi"))
+
+        return divergences
+
+    def identify_divergence_by_segments(self, df_with_macd: pd.DataFrame, segments: List) -> List[Divergence]:
+        """基于线段的背驰识别"""
+        divergences = []
+        if len(segments) < 2:
+            return divergences
+
+        up_segs = [s for s in segments if s.direction.value == 'up']
+        down_segs = [s for s in segments if s.direction.value == 'down']
+
+        for i in range(1, len(up_segs)):
+            prev_seg, curr_seg = up_segs[i - 1], up_segs[i]
+            if curr_seg.high <= prev_seg.high:
+                continue
+            prev_area = self._calc_seg_macd_area(df_with_macd, prev_seg, "top")
+            curr_area = self._calc_seg_macd_area(df_with_macd, curr_seg, "top")
+            if prev_area > 0 and curr_area < prev_area:
+                ratio = curr_area / prev_area
+                strength = Strength.STRONG if ratio < 0.3 else (Strength.MODERATE if ratio < 0.7 else Strength.WEAK)
+                divergences.append(Divergence(
+                    type=DivergenceType.TOP,
+                    start_index=getattr(prev_seg, 'start_index', 0),
+                    end_index=getattr(curr_seg, 'end_index', 0),
+                    start_price=prev_seg.high, end_price=curr_seg.high,
+                    strength=strength, macd_area=curr_area, level="segment"))
+
+        for i in range(1, len(down_segs)):
+            prev_seg, curr_seg = down_segs[i - 1], down_segs[i]
+            if curr_seg.low >= prev_seg.low:
+                continue
+            prev_area = abs(self._calc_seg_macd_area(df_with_macd, prev_seg, "bottom"))
+            curr_area = abs(self._calc_seg_macd_area(df_with_macd, curr_seg, "bottom"))
+            if prev_area > 0 and curr_area < prev_area:
+                ratio = curr_area / prev_area
+                strength = Strength.STRONG if ratio < 0.3 else (Strength.MODERATE if ratio < 0.7 else Strength.WEAK)
+                divergences.append(Divergence(
+                    type=DivergenceType.BOTTOM,
+                    start_index=getattr(prev_seg, 'start_index', 0),
+                    end_index=getattr(curr_seg, 'end_index', 0),
+                    start_price=prev_seg.low, end_price=curr_seg.low,
+                    strength=strength, macd_area=-curr_area, level="segment"))
+
+        return divergences
+
+    def _calc_bi_macd_area(self, df: pd.DataFrame, bi, direction: str) -> float:
+        """计算单笔区间内的MACD面积"""
+        start = max(0, bi.start_index)
+        end = min(len(df) - 1, bi.end_index)
+        if start > end:
+            return 0.0
+        macd_values = df.iloc[start:end + 1]['macd'].values
+        if len(macd_values) == 0:
+            return 0.0
+        if direction == "top":
+            return float(np.sum(macd_values[macd_values > 0]))
+        else:
+            return float(np.sum(macd_values[macd_values < 0]))
+
+    def _calc_seg_macd_area(self, df: pd.DataFrame, seg, direction: str) -> float:
+        """计算线段区间内的MACD面积"""
+        start = max(0, getattr(seg, 'start_index', seg.bi_list[0].start_index if hasattr(seg, 'bi_list') else 0))
+        end = min(len(df) - 1, getattr(seg, 'end_index', seg.bi_list[-1].end_index if hasattr(seg, 'bi_list') else 0))
+        if start > end:
+            return 0.0
+        macd_values = df.iloc[start:end + 1]['macd'].values
+        if len(macd_values) == 0:
+            return 0.0
+        if direction == "top":
+            return float(np.sum(macd_values[macd_values > 0]))
+        else:
+            return float(np.sum(macd_values[macd_values < 0]))
+
     def _divergence_to_dict(self, divergence: Divergence) -> Dict:
         """背驰转字典"""
         return {
@@ -390,5 +537,6 @@ class DynamicsAnalyzer:
             "start_price": divergence.start_price,
             "end_price": divergence.end_price,
             "strength": divergence.strength.value,
-            "macd_area": divergence.macd_area
+            "macd_area": divergence.macd_area,
+            "level": divergence.level
         }

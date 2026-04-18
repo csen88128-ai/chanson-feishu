@@ -1087,8 +1087,16 @@ class TrendStrengthAnalyzer:
         Returns:
             趋势方向（up/down/neutral）
         """
-        # 这里简化处理，实际应该考虑价格和动量的方向
-        return "neutral"
+        # 基于价格趋势和动量的方向判断
+        # price_trend 来自线性回归斜率，有方向信息
+        # 这里需要传入方向信息，简化处理用动量方向
+        # 注意：此方法需要配合实际的价格方向使用
+        if price_trend > 0.3 and momentum > 0.3:
+            return "up"
+        elif price_trend < 0.1 and momentum < 0.1:
+            return "down"
+        else:
+            return "neutral"
 
 
 # 快捷函数
